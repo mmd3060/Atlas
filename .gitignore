@@ -1,2 +1,18 @@
-.venv/
+# Environment
 .env
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Atlas Memories
+memory/chat_history.json
+memory/daily.json
+memory/long_term.json
+
+# Logs
+logs/
+
+# OS files
+.DS_Store
