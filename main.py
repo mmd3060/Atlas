@@ -1,9 +1,11 @@
+import time
 import os
 
 from dotenv import load_dotenv
 
 from core.router import get_provider
 from memory.chat_memory import add_message
+from stats.token_tracker import get_usage_report
 
 
 # Load environment variables
@@ -27,7 +29,9 @@ while True:
 
 
     if not user_input:
-        print("Atlas: یک پیام بنویس محمد 🙂")
+        print(
+            "Atlas: یک پیام بنویس محمد 🙂"
+        )
         continue
 
 
@@ -40,18 +44,60 @@ while True:
         break
 
 
+
+    # =========================
+    # Atlas Commands
+    # =========================
+
+    command = user_input.lower()
+
+
+    if command in [
+        "وضعیت مصرف",
+        "مصرف توکن",
+        "token usage",
+        "usage"
+    ]:
+
+        print(
+            "\nAtlas:\n",
+            get_usage_report()
+        )
+
+        continue
+
+
+
+    # =========================
+    # Normal AI Chat
+    # =========================
+
     try:
 
-        # Save user message
+        start = time.time()
+
+
         messages = add_message(
             "user",
             user_input
         )
 
 
-        # Get response
+        print(
+            f"📦 Messages: {len(messages)}"
+        )
+
+
         answer = ai.chat(
             messages
+        )
+
+
+        elapsed = time.time() - start
+
+
+        print(
+            f"⏱️ Response: {elapsed:.2f}s"
         )
 
 
@@ -61,7 +107,6 @@ while True:
         )
 
 
-        # Save Atlas response
         add_message(
             "assistant",
             answer
