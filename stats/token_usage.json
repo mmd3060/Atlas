@@ -1,12 +1,12 @@
 {
     "OpenRouter": {
-        "requests": 3,
-        "prompt_tokens": 3593,
-        "completion_tokens": 523,
-        "total_tokens": 4116,
-        "last_used": "2026-07-22 15:18:06",
+        "requests": 8,
+        "prompt_tokens": 13059,
+        "completion_tokens": 2681,
+        "total_tokens": 15740,
+        "last_used": "2026-07-22 16:14:37",
         "models": {
-            "openrouter/free": 3
+            "openrouter/free": 8
         }
     }
 }
