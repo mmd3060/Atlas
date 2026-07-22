@@ -38,8 +38,8 @@ class NvidiaProvider:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=final_messages,
-                temperature=0.8,
-                max_tokens=2048
+                temperature=0.5,
+                max_tokens=512
             )
 
 

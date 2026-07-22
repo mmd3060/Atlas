@@ -26,7 +26,7 @@ def add_message(role, content):
     })
 
     # فقط آخرین 20 پیام را نگه می‌داریم
-    messages = messages[-20:]
+    messages = messages[-8:]
 
     save_chat(messages)
 

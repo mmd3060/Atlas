@@ -1,37 +1,76 @@
 import os
-from dotenv import load_dotenv
-from core.router import get_provider
-from memory.chat_memory import load_chat, add_message
 
+from dotenv import load_dotenv
+
+from core.router import get_provider
+from memory.chat_memory import add_message
+
+
+# Load environment variables
 load_dotenv()
 
+
+# Start AI provider
 ai = get_provider()
 
+
 print("Atlas آنلاین شد 🚀")
+print(
+    f"Provider: {ai.current_name()}"
+)
 print("برای خروج بنویس: exit")
 
-# بارگذاری تاریخچه قبلی گفتگو
-chat_history = load_chat()
 
 while True:
-    user_input = input("\nمحمد: ")
+
+    user_input = input("\nمحمد: ").strip()
+
+
+    if not user_input:
+        print("Atlas: یک پیام بنویس محمد 🙂")
+        continue
+
 
     if user_input.lower() == "exit":
-        print("Atlas: فعلاً خداحافظ محمد 🦔⚡")
+
+        print(
+            "Atlas: فعلاً خداحافظ محمد 🦔⚡"
+        )
+
         break
 
-    # اضافه کردن پیام محمد به حافظه
-    messages = add_message(
-        "user",
-        user_input
-    )
 
-    answer = ai.chat(messages)
+    try:
 
-    print("\nAtlas:", answer)
+        # Save user message
+        messages = add_message(
+            "user",
+            user_input
+        )
 
-    # ذخیره جواب Atlas در حافظه
-    add_message(
-        "assistant",
-        answer
-    )
+
+        # Get response
+        answer = ai.chat(
+            messages
+        )
+
+
+        print(
+            "\nAtlas:",
+            answer
+        )
+
+
+        # Save Atlas response
+        add_message(
+            "assistant",
+            answer
+        )
+
+
+    except Exception as error:
+
+        print(
+            "\n⚠️ Atlas Error:",
+            error
+        )

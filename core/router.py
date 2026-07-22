@@ -1,20 +1,24 @@
 import os
 
-from providers.github import GitHubProvider
-from providers.nvidia import NvidiaProvider
-from providers.openrouter import OpenRouterProvider
+from providers.manager import ProviderManager
+
+
+_manager = ProviderManager()
 
 
 def get_provider():
-    provider = os.getenv("DEFAULT_PROVIDER", "github").lower()
 
-    providers = {
-        "github": GitHubProvider,
-        "nvidia": NvidiaProvider,
-        "openrouter": OpenRouterProvider,
-    }
+    provider = os.getenv(
+        "DEFAULT_PROVIDER",
+        ""
+    ).lower()
 
-    if provider not in providers:
-        raise ValueError(f"Unknown provider: {provider}")
 
-    return providers[provider]()
+    if provider:
+
+        _manager.set_provider(
+            provider
+        )
+
+
+    return _manager
