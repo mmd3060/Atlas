@@ -9,7 +9,6 @@ _manager = ProviderManager()
 
 def get_provider(message=None):
 
-    # اگر پیام داریم، Smart Router تصمیم می‌گیرد
     if message:
 
         task = detect_task(message)
@@ -28,15 +27,13 @@ def get_provider(message=None):
             _manager.set_provider(provider)
 
         except ValueError:
-
             print(
-                f"⚠️ Provider {provider} unavailable"
+                f"⚠️ Provider {provider} not found"
             )
 
 
     else:
 
-        # حالت قدیمی با env
         provider = os.getenv(
             "DEFAULT_PROVIDER",
             ""
@@ -46,9 +43,7 @@ def get_provider(message=None):
         if provider:
 
             try:
-                _manager.set_provider(
-                    provider
-                )
+                _manager.set_provider(provider)
 
             except ValueError:
                 pass

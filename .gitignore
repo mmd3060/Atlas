@@ -16,3 +16,9 @@ logs/
 
 # OS files
 .DS_Store
+
+# User memories
+memory/users/
+
+# Runtime stats
+stats/

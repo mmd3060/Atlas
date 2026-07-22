@@ -1,5 +1,6 @@
 import logging
 
+from telegram import Update
 from telegram.request import HTTPXRequest
 from telegram.ext import (
     Application,

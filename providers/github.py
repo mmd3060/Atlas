@@ -16,8 +16,8 @@ class GitHubProvider:
         )
 
         self.model = os.getenv(
-            "MODEL_NAME",
-            "meta/Llama-3.3-70B-Instruct"
+            "GITHUB_MODEL",
+            "openai/gpt-4.1"
         )
 
 

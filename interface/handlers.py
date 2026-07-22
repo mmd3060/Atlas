@@ -5,12 +5,11 @@ from telegram.ext import ContextTypes
 
 from core.router import get_provider
 from memory.user_memory import add_message
+
 from interface.utils import (
     split_message,
     typing_indicator,
 )
-
-ai = get_provider()
 
 
 async def start_command(
@@ -19,7 +18,7 @@ async def start_command(
 ):
 
     await update.message.reply_text(
-        "سلام! 👋\n\n"
+        "سلام محمد! 👋\n\n"
         "من Atlas هستم 🤖\n"
         "آماده‌ام کمکت کنم 🚀"
     )
@@ -33,6 +32,7 @@ async def handle_message(
     if not update.message:
         return
 
+
     if not update.message.text:
 
         await update.message.reply_text(
@@ -41,14 +41,24 @@ async def handle_message(
 
         return
 
+
     user_input = update.message.text.strip()
+
 
     if not user_input:
         return
 
+
     user_id = update.effective_user.id
 
+
     try:
+
+        # Smart Router انتخاب Provider
+        ai = get_provider(
+            user_input
+        )
+
 
         # ذخیره پیام کاربر
         messages = add_message(
@@ -57,16 +67,20 @@ async def handle_message(
             user_input
         )
 
+
         print(
             f"🧠 Using: {ai.current_name()}"
         )
+
 
         print(
             f"📦 Messages: {len(messages)}"
         )
 
-        # شروع typing...
+
+        # نمایش typing تا پایان پاسخ
         stop_event = asyncio.Event()
+
 
         typing_task = asyncio.create_task(
             typing_indicator(
@@ -75,37 +89,50 @@ async def handle_message(
             )
         )
 
-        # اجرای مدل داخل Thread
-        answer = await asyncio.to_thread(
-            ai.chat,
-            messages
-        )
 
-        # توقف typing
-        stop_event.set()
+        try:
 
-        await typing_task
+            # جلوگیری از قفل شدن ربات
+            answer = await asyncio.to_thread(
+                ai.chat,
+                messages
+            )
 
-        # ذخیره پاسخ
+
+        finally:
+
+            # توقف typing
+            stop_event.set()
+
+            await typing_task
+
+
+
+        # ذخیره پاسخ Atlas
         add_message(
             user_id,
             "assistant",
             answer
         )
 
-        # ارسال پاسخ
+
+        # ارسال پاسخ تکه‌ای
         for part in split_message(answer):
 
             await update.message.reply_text(
                 part
             )
 
+
     except Exception as error:
+
 
         print(
             f"⚠️ Atlas Error: {error}"
         )
 
+
         await update.message.reply_text(
-            f"⚠️ Atlas Error:\n{error}"
+            "⚠️ یک خطا در Atlas رخ داد.\n"
+            f"{error}"
         )
