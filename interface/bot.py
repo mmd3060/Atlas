@@ -10,12 +10,10 @@ from telegram.ext import (
 )
 
 from interface.config import BOT_TOKEN
-
 from interface.handlers import (
     start_command,
     handle_message,
 )
-
 from interface.commands import (
     usage_command,
     status_command,
@@ -23,22 +21,32 @@ from interface.commands import (
     clear_command,
 )
 
+# =========================
+# Logging
+# =========================
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    level=logging.INFO
+    level=logging.INFO,
 )
 
+logger = logging.getLogger("Atlas")
+
+
+# =========================
+# Error Handler
+# =========================
 
 async def error_handler(
     update: object,
-    context: ContextTypes.DEFAULT_TYPE
+    context: ContextTypes.DEFAULT_TYPE,
 ):
+    logger.exception(context.error)
 
-    print(
-        f"⚠️ Telegram Error: {context.error}"
-    )
 
+# =========================
+# Main
+# =========================
 
 def main():
 
@@ -49,7 +57,6 @@ def main():
         pool_timeout=30,
     )
 
-
     app = (
         Application.builder()
         .token(BOT_TOKEN)
@@ -57,76 +64,53 @@ def main():
         .build()
     )
 
+    # ======================
+    # Commands
+    # ======================
 
-    # ========= Commands =========
+    app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("usage", usage_command))
+    app.add_handler(CommandHandler("status", status_command))
+    app.add_handler(CommandHandler("model", model_command))
+    app.add_handler(CommandHandler("clear", clear_command))
 
-    app.add_handler(
-        CommandHandler(
-            "start",
-            start_command
-        )
-    )
-
-    app.add_handler(
-        CommandHandler(
-            "usage",
-            usage_command
-        )
-    )
-
-    app.add_handler(
-        CommandHandler(
-            "status",
-            status_command
-        )
-    )
-
-    app.add_handler(
-        CommandHandler(
-            "model",
-            model_command
-        )
-    )
-
-    app.add_handler(
-        CommandHandler(
-            "clear",
-            clear_command
-        )
-    )
-
-    # ========= Chat =========
+    # ======================
+    # Messages
+    # ======================
 
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
-            handle_message
+            handle_message,
         )
     )
 
-    # ========= Errors =========
+    # ======================
+    # Errors
+    # ======================
 
-    app.add_error_handler(
-        error_handler
-    )
+    app.add_error_handler(error_handler)
 
-    print("=" * 45)
+    print()
+    print("=" * 48)
     print("🤖 Atlas Telegram Interface")
-    print("✅ Status : ONLINE")
-    print("📡 Mode   : Polling")
-    print("=" * 45)
+    print("✅ Status   : ONLINE")
+    print("📡 Mode     : Polling")
+    print("🧠 Provider : Auto")
+    print("=" * 48)
+    print()
 
     try:
-
         app.run_polling(
-            drop_pending_updates=True
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES,
         )
 
     except KeyboardInterrupt:
+        print("\n🛑 Atlas stopped by user.")
 
-        print(
-            "\n🛑 Atlas Telegram Bot Stopped"
-        )
+    finally:
+        print("👋 Goodbye.")
 
 
 if __name__ == "__main__":
