@@ -1,6 +1,5 @@
 import logging
 
-from telegram import Update
 from telegram.request import HTTPXRequest
 from telegram.ext import (
     Application,
@@ -11,15 +10,22 @@ from telegram.ext import (
 )
 
 from interface.config import BOT_TOKEN
+
 from interface.handlers import (
     start_command,
     handle_message,
 )
 
+from interface.commands import (
+    usage_command,
+    status_command,
+    model_command,
+    clear_command,
+)
 
-# Telegram error logging
+
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     level=logging.INFO
 )
 
@@ -36,7 +42,6 @@ async def error_handler(
 
 def main():
 
-    # Better connection settings
     request = HTTPXRequest(
         connect_timeout=30,
         read_timeout=30,
@@ -53,7 +58,7 @@ def main():
     )
 
 
-    # Commands
+    # ========= Commands =========
 
     app.add_handler(
         CommandHandler(
@@ -62,8 +67,35 @@ def main():
         )
     )
 
+    app.add_handler(
+        CommandHandler(
+            "usage",
+            usage_command
+        )
+    )
 
-    # Normal messages
+    app.add_handler(
+        CommandHandler(
+            "status",
+            status_command
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "model",
+            model_command
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "clear",
+            clear_command
+        )
+    )
+
+    # ========= Chat =========
 
     app.add_handler(
         MessageHandler(
@@ -72,18 +104,17 @@ def main():
         )
     )
 
-
-    # Error handling
+    # ========= Errors =========
 
     app.add_error_handler(
         error_handler
     )
 
-
-    print(
-        "📱 Atlas Telegram Bot Online 🚀"
-    )
-
+    print("=" * 45)
+    print("🤖 Atlas Telegram Interface")
+    print("✅ Status : ONLINE")
+    print("📡 Mode   : Polling")
+    print("=" * 45)
 
     try:
 
@@ -91,11 +122,10 @@ def main():
             drop_pending_updates=True
         )
 
-
     except KeyboardInterrupt:
 
         print(
-            "\n🛑 Telegram Bot stopped"
+            "\n🛑 Atlas Telegram Bot Stopped"
         )
 
 

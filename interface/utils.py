@@ -1,31 +1,74 @@
-MAX_MESSAGE_LENGTH = 4000
+import asyncio
+
+from telegram import Update
+from telegram.constants import ChatAction
 
 
-def split_message(text):
+async def typing_indicator(
+    update: Update,
+    stop_event: asyncio.Event,
+):
+    """
+    ارسال وضعیت typing تا وقتی پاسخ آماده شود
+    """
 
-    if len(text) <= MAX_MESSAGE_LENGTH:
+    while not stop_event.is_set():
+
+        try:
+
+            await update.effective_chat.send_action(
+                ChatAction.TYPING
+            )
+
+        except Exception:
+            pass
+
+
+        try:
+
+            await asyncio.wait_for(
+                stop_event.wait(),
+                timeout=4
+            )
+
+        except asyncio.TimeoutError:
+
+            continue
+
+
+
+def split_message(
+    text,
+    limit=4000
+):
+    """
+    تقسیم پیام‌های طولانی برای محدودیت تلگرام
+    """
+
+    if len(text) <= limit:
         return [text]
+
 
     parts = []
 
-    while len(text) > MAX_MESSAGE_LENGTH:
+    while len(text) > limit:
 
-        split_at = text.rfind(
-            "\n",
-            0,
-            MAX_MESSAGE_LENGTH
-        )
+        cut = text[:limit]
 
-        if split_at == -1:
-            split_at = MAX_MESSAGE_LENGTH
+        # تلاش برای شکستن از فاصله
+        position = cut.rfind(" ")
 
-        parts.append(
-            text[:split_at]
-        )
+        if position != -1:
+            cut = text[:position]
 
-        text = text[split_at:]
+
+        parts.append(cut)
+
+        text = text[len(cut):]
+
 
     if text:
         parts.append(text)
+
 
     return parts
