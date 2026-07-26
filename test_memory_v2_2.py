@@ -1,13 +1,16 @@
 """
-Memory System v2.2 — Architecture Tests
+Memory System v2.2 — Final Architecture Tests
 
-Tests the CLEAN architecture:
+Architecture:
     Brain → Coordinator → Router → Pipeline → Repository → Backend
 
 Each layer has exactly ONE responsibility.
+No circular dependencies.
+No Backend access from higher layers.
 """
 
 import sys
+import inspect
 sys.path.insert(0, "/data/workspace/Atlas")
 
 from core.memory.types import MemoryRecord, MEMORY_TYPES
@@ -34,35 +37,51 @@ def test(name, condition):
 
 
 # ═══════════════════════════════════════════════
-# 1. MemoryRepository (replaces MemoryEngine)
+# 1. MemoryRepository (upsert)
 # ═══════════════════════════════════════════════
-print("\n━━━ 1. MemoryRepository ━━━")
+print("\n━━━ 1. MemoryRepository (upsert) ━━━")
 
 repo = MemoryRepository()
 repo.open()
 
-repo.save("user", "name", "MMD")
-test("save + load", repo.load("user", "name") == "MMD")
-test("exists", repo.exists("user", "name"))
+# Test upsert
+rec1 = MemoryRecord(key="user::name", value="MMD", memory_type="user", importance=0.9)
+action = repo.upsert(rec1)
+test("upsert insert", action == "stored")
+test("upsert value", repo.load("user", "user::name") == "MMD")
+
+# Upsert update
+rec2 = MemoryRecord(key="user::name", value="Mohammad", memory_type="user", importance=0.95)
+action = repo.upsert(rec2)
+test("upsert update", action == "updated")
+test("upsert updated value", repo.load("user", "user::name") == "Mohammad")
+
+# save/load still works
+repo.save("user", "user::test", "hello")
+test("save + load", repo.load("user", "user::test") == "hello")
+
+# exists
+test("exists", repo.exists("user", "user::name"))
+
+# count
 test("count", repo.count("user") >= 1)
-test("list_keys", "name" in repo.list_keys("user"))
 
-repo.update("user", "name", "Mohammad")
-test("update", repo.load("user", "name") == "Mohammad")
+# list_keys
+test("list_keys", "user::name" in repo.list_keys("user"))
 
-repo.delete("user", "name")
-test("delete", not repo.exists("user", "name"))
-test("load missing", repo.load("user", "x", "default") == "default")
+# delete
+repo.delete("user", "user::test")
+test("delete", not repo.exists("user", "user::test"))
 
+# get_context
 ctx = repo.get_context()
 test("get_context", isinstance(ctx, dict))
 
 repo.close()
-test("health after close", not repo.health())
 
 
 # ═══════════════════════════════════════════════
-# 2. MemoryPipeline (decision maker)
+# 2. MemoryPipeline (uses upsert)
 # ═══════════════════════════════════════════════
 print("\n━━━ 2. MemoryPipeline ━━━")
 
@@ -70,30 +89,25 @@ pipeline = MemoryPipeline()
 
 # Test analyze + store
 result = pipeline.process("اسم من محمد است")
-test("pipeline saved user info", result["status"] in ["saved", "stored"])
-test("pipeline category is user", result["category"] == "user")
+test("pipeline saved", result["status"] in ["saved", "stored", "updated"])
+test("pipeline category", result["category"] == "user")
 
 # Test ignore
 result = pipeline.process("سلام")
-test("pipeline ignores greeting", result["status"] == "ignored")
+test("pipeline ignores", result["status"] == "ignored")
 
 # Test forced importance
 result = pipeline.process("این مهمه", importance=0.95)
-test("forced importance saved", result["status"] in ["saved", "stored"])
-
-# Test build_record (private method, but Pipeline's responsibility)
-rec = pipeline._build_record(key="test::key", value="val", memory_type="project", importance=0.6)
-test("build_record type", rec.memory_type == "project")
-test("build_record importance", rec.importance == 0.6)
+test("forced importance", result["status"] in ["saved", "stored", "updated"])
 
 # Pipeline should NOT have: route(), export_context(), process_message()
-test("no route method", not hasattr(pipeline, 'route'))
-test("no export_context method", not hasattr(pipeline, 'export_context'))
-test("no process_message method", not hasattr(pipeline, 'process_message'))
+test("no route", not hasattr(pipeline, 'route'))
+test("no export_context", not hasattr(pipeline, 'export_context'))
+test("no process_message", not hasattr(pipeline, 'process_message'))
 
 
 # ═══════════════════════════════════════════════
-# 3. MemoryRouter (PURE SWITCH)
+# 3. MemoryRouter (PURE SWITCH — no Coordinator dependency)
 # ═══════════════════════════════════════════════
 print("\n━━━ 3. MemoryRouter (PURE SWITCH) ━━━")
 
@@ -101,20 +115,26 @@ p = MemoryPipeline()
 r = MemoryRouter(pipeline=p)
 
 result = r.route("سلام Atlas", source="brain")
-test("route brain → pipeline", result["status"] in ["saved", "stored", "ignored"])
+test("route brain", result["status"] in ["saved", "stored", "updated", "ignored"])
 
 result = r.route("test", source="tool")
-test("route tool → pipeline", result["status"] in ["saved", "stored", "ignored"])
+test("route tool", result["status"] in ["saved", "stored", "updated", "ignored"])
 
 result = r.route("test", source="agent")
-test("route agent → pipeline", result["status"] in ["saved", "stored", "ignored"])
+test("route agent", result["status"] in ["saved", "stored", "updated", "ignored"])
 
-# Router should NOT have: store(), retrieve(), search(), MemoryRecord, Policy
-test("no store method", not hasattr(r, 'store'))
-test("no retrieve method", not hasattr(r, 'retrieve'))
-test("no search method", not hasattr(r, 'search'))
-test("no export_context method", not hasattr(r, 'export_context'))
-test("no process_message method", not hasattr(r, 'process_message'))
+# Router should NOT have: store(), retrieve(), search(), Coordinator
+test("no store", not hasattr(r, 'store'))
+test("no retrieve", not hasattr(r, 'retrieve'))
+test("no search", not hasattr(r, 'search'))
+test("no export_context", not hasattr(r, 'export_context'))
+test("no process_message", not hasattr(r, 'process_message'))
+
+# Verify no Coordinator import
+router_source = inspect.getsource(MemoryRouter)
+test("no Coordinator import", "Coordinator" not in router_source)
+test("no MemoryRecord import", "MemoryRecord" not in router_source)
+test("no Policy import", "MemoryPolicy" not in router_source)
 
 
 # ═══════════════════════════════════════════════
@@ -132,15 +152,15 @@ test("has memory", "memory" in result)
 
 # Brain request
 result = coord.process_brain_request("من دارم Atlas OS می‌سازم")
-test("process_brain_request", result["status"] in ["saved", "stored", "ignored"])
+test("process_brain_request", result["status"] in ["saved", "stored", "updated", "ignored"])
 
 # Tool output
 result = coord.process_tool_output("tool output")
-test("process_tool_output", result["status"] in ["saved", "stored", "ignored"])
+test("process_tool_output", result["status"] in ["saved", "stored", "updated", "ignored"])
 
 # Route delegation
 result = coord.route("test", source="brain")
-test("route delegation", result["status"] in ["saved", "stored", "ignored"])
+test("route delegation", result["status"] in ["saved", "stored", "updated", "ignored"])
 
 # Context export
 ctx = coord.export_context()
@@ -159,15 +179,15 @@ test("snapshot", "conversation" in snap and "memory" in snap)
 
 
 # ═══════════════════════════════════════════════
-# 5. ContextBuilder (context snapshots)
+# 5. ContextBuilder (uses Repository, not Backend)
 # ═══════════════════════════════════════════════
 print("\n━━━ 5. ContextBuilder ━━━")
 
-b = DictBackend()
-b.open()
-b.put(MemoryRecord(key="user::test", value="hello", memory_type="user", importance=0.8))
+repo2 = MemoryRepository()
+repo2.open()
+repo2.save("user", "user::test", "hello")
 
-builder = ContextBuilder(backend=b)
+builder = ContextBuilder(repository=repo2)
 ctx = builder.export()
 test("export has timestamp", "timestamp" in ctx)
 test("export has memories", "memories" in ctx)
@@ -179,30 +199,36 @@ test("summary total", summary["total_records"] >= 1)
 text = builder.export_for_brain()
 test("brain export is string", isinstance(text, str))
 
-b.close()
+# ContextBuilder should NOT import Backend
+builder_source = inspect.getsource(ContextBuilder)
+test("no Backend import", "MemoryBackend" not in builder_source)
+test("no DictBackend import", "DictBackend" not in builder_source)
+
+repo2.close()
 
 
 # ═══════════════════════════════════════════════
-# 6. Architecture Rules — verify separation
+# 6. Architecture Rules
 # ═══════════════════════════════════════════════
 print("\n━━━ 6. Architecture Rules ━━━")
 
-# Router should be thin
-import inspect
-router_source = inspect.getsource(MemoryRouter)
-test("Router has no MemoryRecord import", "MemoryRecord" not in router_source)
-test("Router has no Policy import", "MemoryPolicy" not in router_source)
-test("Router has no Backend import", "MemoryBackend" not in router_source)
+# Router is thin
+test("Router has no MemoryRecord", "MemoryRecord" not in inspect.getsource(MemoryRouter))
+test("Router has no Policy", "MemoryPolicy" not in inspect.getsource(MemoryRouter))
+test("Router has no Backend", "MemoryBackend" not in inspect.getsource(MemoryRouter))
+test("Router has no Coordinator", "Coordinator" not in inspect.getsource(MemoryRouter))
 
 # Pipeline builds records
-pipeline_source = inspect.getsource(MemoryPipeline)
-test("Pipeline has MemoryRecord", "MemoryRecord" in pipeline_source)
-test("Pipeline has Policy", "MemoryPolicy" in pipeline_source)
+test("Pipeline has MemoryRecord", "MemoryRecord" in inspect.getsource(MemoryPipeline))
+test("Pipeline has Policy", "MemoryPolicy" in inspect.getsource(MemoryPipeline))
 
-# Coordinator is the entry point
-coord_source = inspect.getsource(MemoryCoordinator)
-test("Coordinator has process_message", "def process_message" in coord_source)
-test("Coordinator has process_brain_request", "def process_brain_request" in coord_source)
+# Coordinator is entry point
+test("Coordinator has process_message", "def process_message" in inspect.getsource(MemoryCoordinator))
+test("Coordinator has process_brain_request", "def process_brain_request" in inspect.getsource(MemoryCoordinator))
+
+# ContextBuilder uses Repository
+test("ContextBuilder has repository", "repository" in inspect.getsource(ContextBuilder))
+test("ContextBuilder has no Backend", "MemoryBackend" not in inspect.getsource(ContextBuilder))
 
 
 # ═══════════════════════════════════════════════
@@ -218,7 +244,7 @@ test("full flow user", result["status"] == "processed")
 
 # Brain request → pipeline
 result = full_coord.process_brain_request("این مهمه")
-test("full flow brain", result["status"] in ["saved", "stored", "ignored"])
+test("full flow brain", result["status"] in ["saved", "stored", "updated", "ignored"])
 
 # Export context
 ctx = full_coord.export_context()

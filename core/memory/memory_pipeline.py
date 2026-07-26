@@ -89,14 +89,8 @@ class MemoryPipeline:
             importance=imp,
         )
 
-        # ── Step 6: Store via Repository ──
-        existing = self._repository.load(category, key)
-        if existing is not None:
-            self._repository.update(category, key, text)
-            action = "updated"
-        else:
-            self._repository.save(category, key, text)
-            action = "stored"
+        # ── Step 6: Store via Repository (one call) ──
+        action = self._repository.upsert(record)
 
         return {
             "status": action,

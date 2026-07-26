@@ -53,6 +53,24 @@ class MemoryRepository:
     #  CRUD
     # ═══════════════════════════════════════════════
 
+    def upsert(self, record):
+        """
+        Insert or update a MemoryRecord.
+        This is the ONLY method Pipeline should use for storage.
+        """
+        existing = self._backend.get(record.memory_type, record.key)
+        if existing:
+            # merge metadata
+            merged_meta = {**existing.metadata, **record.metadata}
+            record.metadata = merged_meta
+            record.created_at = existing.created_at
+            record.access_count = existing.access_count
+            self._backend.update(record)
+            return "updated"
+        else:
+            self._backend.put(record)
+            return "stored"
+
     def save(self, category, key, value):
         """Save a key-value pair to a category."""
         from core.memory.types import MemoryRecord
@@ -61,11 +79,7 @@ class MemoryRepository:
             value=value,
             memory_type=category,
         )
-        existing = self._backend.get(category, key)
-        if existing:
-            self._backend.update(record)
-        else:
-            self._backend.put(record)
+        self.upsert(record)
 
     def load(self, category, key, default=None):
         """Load a value by category and key."""

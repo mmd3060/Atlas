@@ -5,11 +5,11 @@ The Router is a dumb switch. It receives a request,
 looks at the source, and forwards it. That's it.
 
 Architecture:
-    Brain → Coordinator → Router → Pipeline → Repository → Backend
+    Brain → Router → Pipeline → Repository → Backend
 
 The Router does ONLY:
   1. Receive (source, message)
-  2. Forward to the right handler
+  2. Forward to Pipeline
 
 The Router does NOT:
   - Build MemoryRecords
@@ -32,49 +32,29 @@ class MemoryRouter:
         result = router.route("hello", source="brain")
     """
 
-    def __init__(self, pipeline=None, coordinator=None):
+    def __init__(self, pipeline=None):
         """
         Args:
-            pipeline:    MemoryPipeline instance (for brain/tool requests)
-            coordinator: MemoryCoordinator instance (for user messages)
+            pipeline: MemoryPipeline instance (for brain/tool/agent requests)
         """
         self._pipeline = pipeline
-        self._coordinator = coordinator
 
     def route(
         self,
         message: str,
         source: str = "brain",
-        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Pure routing — no decisions, no record building.
 
         Args:
             message:  The content
-            source:   Who sent this (brain / agent / tool / user)
-            user_id:  Optional user identifier (only for source="user")
+            source:   Who sent this (brain / agent / tool)
 
         Returns:
-            Result dict from the handler.
+            Result dict from the Pipeline.
         """
-        if source == "user":
-            return self._route_to_coordinator(message, user_id)
-        else:
-            # brain, tool, agent → all go to pipeline
-            return self._route_to_pipeline(message)
-
-    def _route_to_coordinator(self, message, user_id=None):
-        """User messages → Coordinator."""
-        if self._coordinator is None:
-            return {"status": "error", "reason": "coordinator not wired"}
-        return self._coordinator.process_message(
-            user_id=user_id or "anonymous",
-            message=message,
-        )
-
-    def _route_to_pipeline(self, message):
-        """Brain/tool/agent → Pipeline."""
+        # All sources go to Pipeline
         if self._pipeline is None:
             return {"status": "error", "reason": "pipeline not wired"}
         return self._pipeline.process(text=message)

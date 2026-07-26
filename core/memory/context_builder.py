@@ -7,31 +7,38 @@ Responsible for:
   - Filtering and ranking context
 
 ContextBuilder does NOT:
-  - Store memories (Engine does that)
+  - Store memories (Repository does that)
   - Route requests (Router does that)
   - Analyze importance (Pipeline does that)
+  - Know about Backend (uses Repository)
 """
 
 import time
 from typing import Any, Dict, List, Optional
 
 from core.memory.types import MEMORY_TYPES
-from core.memory.backend import MemoryBackend
-from core.memory.backends.dict_backend import DictBackend
 
 
 class ContextBuilder:
     """
     Builds context snapshots for Brain.
 
+    Uses Repository (not Backend) for data access.
+    This keeps the abstraction clean:
+        ContextBuilder → Repository → Backend
+
     Usage:
-        builder = ContextBuilder(backend=my_backend)
+        builder = ContextBuilder(repository=my_repository)
         context = builder.export()
         context = builder.export(memory_types=["user", "project"])
     """
 
-    def __init__(self, backend=None):
-        self._backend = backend or DictBackend()
+    def __init__(self, repository=None):
+        """
+        Args:
+            repository: MemoryRepository instance
+        """
+        self._repository = repository
 
     def export(
         self,
@@ -53,20 +60,23 @@ class ContextBuilder:
                 }
             }
         """
+        if self._repository is None:
+            return {"timestamp": time.time(), "total_records": 0, "memories": {}}
+
         types_to_export = memory_types or list(MEMORY_TYPES)
         memories = {}
         total = 0
 
         for mt in types_to_export:
-            records = self._backend.list_records(
-                memory_type=mt, limit=limit_per_type
-            )
-            # filter expired
-            live = [r.to_dict() for r in records if not r.is_expired()]
+            # Use Repository's get_context for backward compat
+            ctx = self._repository.get_context()
+            records = ctx.get(mt, {})
+            # Convert to list format
+            live = [{"key": k, "value": v} for k, v in records.items()]
             if not include_metadata:
                 for rec in live:
                     rec.pop("metadata", None)
-            memories[mt] = live
+            memories[mt] = live[:limit_per_type]
             total += len(live)
 
         return {
@@ -102,11 +112,11 @@ class ContextBuilder:
 
     def export_summary(self) -> Dict[str, Any]:
         """Export a summary with counts per type."""
-        counts = {}
-        for mt in MEMORY_TYPES:
-            records = self._backend.list_records(memory_type=mt, limit=1000)
-            live = [r for r in records if not r.is_expired()]
-            counts[mt] = len(live)
+        if self._repository is None:
+            return {"timestamp": time.time(), "total_records": 0, "counts": {}}
+
+        ctx = self._repository.get_context()
+        counts = {mt: len(records) for mt, records in ctx.items()}
 
         return {
             "timestamp": time.time(),

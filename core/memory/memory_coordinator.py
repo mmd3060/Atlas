@@ -50,14 +50,11 @@ class MemoryCoordinator:
         self.state = ConversationStateManager()
         self.context = ContextManager()
 
-        # ── Routing (pure switch) ──
-        self.router = MemoryRouter(
-            pipeline=self.pipeline,
-            coordinator=self,  # circular but intentional — Router delegates back
-        )
+        # ── Routing (pure switch — no circular dependency) ──
+        self.router = MemoryRouter(pipeline=self.pipeline)
 
-        # ── Context export ──
-        self._context_builder = ContextBuilder(backend=backend)
+        # ── Context export (uses Repository, not Backend) ──
+        self._context_builder = ContextBuilder(repository=self.repository)
 
     # ═══════════════════════════════════════════════
     #  THE ONLY ENTRY POINT — Brain talks here
@@ -99,14 +96,14 @@ class MemoryCoordinator:
         return self.pipeline.process(text=message)
 
     # ═══════════════════════════════════════════════
-    #  ROUTING — delegate to Router
+    #  ROUTING — delegate to Router (pure switch)
     # ═══════════════════════════════════════════════
 
-    def route(self, message, source="brain", user_id=None):
+    def route(self, message, source="brain"):
         """
         Route a request — pure delegation to Router.
         """
-        return self.router.route(message, source, user_id)
+        return self.router.route(message, source)
 
     # ═══════════════════════════════════════════════
     #  CONTEXT
