@@ -90,7 +90,15 @@ while True:
 
 
         if isinstance(ai, dict):
-            answer = f"Provider {ai.get('provider', 'unknown')} is not available in dict mode."
+            # Smart Router dict → resolve to real ProviderManager
+            from providers.manager import ProviderManager
+            provider_name = ai.get("provider", "gemini")
+            manager = ProviderManager()
+            try:
+                manager.set_provider(provider_name)
+            except ValueError:
+                manager.reset()
+            answer = manager.chat(messages)
         else:
             answer = ai.chat(
                 messages
