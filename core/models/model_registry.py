@@ -9,77 +9,51 @@ class ModelRegistry:
 
             "gpt-4.1": {
 
+                "provider": "github",
 
-                "providers": [
-                    "github",
-                    "openrouter"
-                ],
-
-
-                "skills": {
+                "capabilities": {
 
                     "code": 10,
                     "math": 9,
                     "text": 9,
-                    "vision": 8
+                    "vision": 8,
+                    "reasoning": 10
 
-                },
-
-
-                "cost": 7,
-                "context": 10
+                }
 
             },
-
 
 
             "gemini-2.5-pro": {
 
+                "provider": "gemini",
 
-                "providers": [
-                    "google",
-                    "openrouter"
-                ],
-
-
-                "skills": {
+                "capabilities": {
 
                     "code": 8,
                     "math": 10,
                     "text": 9,
-                    "vision": 10
+                    "vision": 10,
+                    "reasoning": 10
 
-                },
-
-
-                "cost": 9,
-                "context": 10
+                }
 
             },
 
 
-
             "qwen-coder": {
 
+                "provider": "nvidia",
 
-                "providers": [
-                    "nvidia",
-                    "openrouter"
-                ],
-
-
-                "skills": {
+                "capabilities": {
 
                     "code": 10,
                     "math": 8,
                     "text": 7,
-                    "vision": 5
+                    "vision": 5,
+                    "reasoning": 8
 
-                },
-
-
-                "cost": 10,
-                "context": 8
+                }
 
             }
 
@@ -88,6 +62,25 @@ class ModelRegistry:
 
 
 
-    def get_models(self):
+    def get_model(self, name):
+
+        return self.models.get(name)
+
+
+
+    def get_provider(self, name):
+
+        model = self.get_model(name)
+
+        if not model:
+
+            return None
+
+
+        return model["provider"]
+
+
+
+    def list_models(self):
 
         return self.models
