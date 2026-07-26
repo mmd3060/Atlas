@@ -29,6 +29,25 @@ from core.memory.memory_router import MemoryRouter
 from core.memory.memory_coordinator import MemoryCoordinator
 from core.memory.context_builder import ContextBuilder
 
+
+def get_memory_prompt():
+    """Get memory context for Brain prompt (simplified)."""
+    try:
+        from core.memory.backends.sqlite_backend import SQLiteBackend
+        backend = SQLiteBackend()
+        backend.open()
+        repo = MemoryRepository(backend=backend)
+        memories = repo.list_all(limit=5)
+        backend.close()
+        if memories:
+            lines = ["[Memory]"]
+            for m in memories:
+                lines.append(f"- {m.value[:80]}")
+            return "\n".join(lines)
+    except Exception:
+        pass
+    return ""
+
 __all__ = [
     "MemoryRecord",
     "MEMORY_TYPES",
@@ -41,4 +60,5 @@ __all__ = [
     "MemoryRouter",
     "MemoryCoordinator",
     "ContextBuilder",
+    "get_memory_prompt",
 ]
