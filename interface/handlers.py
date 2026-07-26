@@ -69,7 +69,7 @@ async def handle_message(
 
 
         print(
-            f"🧠 Using: {ai.current_name()}"
+            f"🧠 Using: {ai.current_name() if hasattr(ai, 'current_name') else ai.get('provider', 'unknown')}"
         )
 
 

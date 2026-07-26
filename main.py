@@ -17,9 +17,10 @@ ai = get_provider()
 
 
 print("Atlas آنلاین شد 🚀")
-print(
-    f"Provider: {ai.current_name()}"
-)
+if isinstance(ai, dict):
+    print(f"Provider: {ai.get('provider', 'unknown')}")
+else:
+    print(f"Provider: {ai.current_name()}")
 print("برای خروج بنویس: exit")
 
 
@@ -88,9 +89,12 @@ while True:
         )
 
 
-        answer = ai.chat(
-            messages
-        )
+        if isinstance(ai, dict):
+            answer = f"Provider {ai.get('provider', 'unknown')} is not available in dict mode."
+        else:
+            answer = ai.chat(
+                messages
+            )
 
 
         elapsed = time.time() - start

@@ -12,15 +12,18 @@ async def usage_command(update, context):
 
 async def status_command(update, context):
     """وضعیت فعلی Atlas"""
+    ai = get_provider("status")
 
-    ai = get_provider()
-
-    provider = ai.current_name()
-    model = getattr(
-        ai.current_provider,
-        "model",
-        "Unknown"
-    )
+    if isinstance(ai, dict):
+        provider = ai.get("provider", "unknown")
+        model = "Unknown"
+    else:
+        provider = ai.current_name()
+        model = getattr(
+            ai.current_provider,
+            "model",
+            "Unknown"
+        )
 
     text = (
         "🤖 Atlas Status\n\n"
@@ -36,14 +39,16 @@ async def status_command(update, context):
 
 async def model_command(update, context):
     """نمایش مدل فعلی"""
+    ai = get_provider("model")
 
-    ai = get_provider()
-
-    model = getattr(
-        ai.current_provider,
-        "model",
-        "Unknown"
-    )
+    if isinstance(ai, dict):
+        model = "Unknown"
+    else:
+        model = getattr(
+            ai.current_provider,
+            "model",
+            "Unknown"
+        )
 
     await update.message.reply_text(
         f"📦 Current Model\n\n{model}"
@@ -52,14 +57,11 @@ async def model_command(update, context):
 
 async def capabilities_command(update, context):
     """نمایش قابلیت‌های واقعی Atlas"""
-
     data = get_capabilities()
-
     active = "\n".join(
         f"✅ {item}"
         for item in data["active"]
     )
-
     developing = "\n".join(
         f"🛠 {item}"
         for item in data["developing"]
@@ -78,7 +80,6 @@ async def capabilities_command(update, context):
 
 async def clear_command(update, context):
     """پاک کردن حافظه (فعلاً غیرفعال)"""
-
     await update.message.reply_text(
         "🚧 این قابلیت هنوز پیاده‌سازی نشده است."
     )
