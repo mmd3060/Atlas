@@ -11,7 +11,7 @@ Modules:
 from core.router.smart_router import SmartRouter
 
 
-def get_provider(message):
+def get_provider(message="hello"):
     """Get provider for a message (legacy interface)."""
     router = SmartRouter()
     decision = router.route(message)
