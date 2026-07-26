@@ -1,60 +1,119 @@
+from typing import List, Dict, Any
+
 from core.models.model_registry import ModelRegistry
 
 
 class ModelRanker:
+    """
+    Atlas OS Model Intelligence
+
+    انتخاب بهترین مدل بدون وابستگی به Provider
+    """
 
     def __init__(self):
-
         self.registry = ModelRegistry()
+
 
     def rank(
         self,
-        task
-    ):
+        task: str
+    ) -> List[Dict[str, Any]]:
 
-        models = self.registry.models
+        results = []
 
-        ranking = []
 
-        for name, info in models.items():
+        for model in self.registry.get_all():
 
-            score = info["skills"].get(
+            caps = model.capabilities
+
+
+            capability_map = {
+
+                "coding": caps.coding,
+                "code": caps.coding,
+
+                "math": caps.math,
+
+                "reasoning": caps.reasoning,
+
+                "text": caps.text,
+
+                "writing": caps.text,
+
+                "vision": caps.vision,
+
+            }
+
+
+            task_score = capability_map.get(
                 task,
-                0
+                caps.reasoning
             )
 
-            ranking.append({
 
-                "model": name,
+            score = (
 
-                "score": score,
+                task_score * 0.60
 
-                "providers": info["providers"]
+                +
+
+                model.speed * 0.15
+
+                +
+
+                model.cost * 0.10
+
+                +
+
+                caps.reasoning * 0.15
+
+            )
+
+
+            results.append({
+
+                "model": model.name,
+
+                "score": round(
+                    score,
+                    4
+                ),
+
+                "capabilities": {
+
+                    "coding": caps.coding,
+
+                    "math": caps.math,
+
+                    "reasoning": caps.reasoning,
+
+                    "text": caps.text,
+
+                    "vision": caps.vision,
+
+                }
 
             })
 
-        ranking.sort(
 
+        results.sort(
             key=lambda x: x["score"],
-
             reverse=True
-
         )
 
-        return ranking
+
+        return results
+
 
 
     def best_model(
         self,
-        task
+        task: str
     ):
 
-        ranking = self.rank(
-            task
-        )
+        ranking = self.rank(task)
 
         if not ranking:
-
             return None
 
         return ranking[0]

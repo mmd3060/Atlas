@@ -6,22 +6,49 @@ from dotenv import load_dotenv
 from core.router import get_provider
 from memory.chat_memory import add_message
 from stats.token_tracker import get_usage_report
+from providers.manager import ProviderManager
 
 
 # Load environment variables
 load_dotenv()
 
 
-# Start AI provider
+# =========================
+# Provider System
+# =========================
+
 ai = get_provider()
+
+manager = ProviderManager()
+
+
+# اگر Router یک Provider مشخص داده باشد
+if isinstance(ai, dict):
+
+    provider_name = ai.get(
+        "provider",
+        "gemini"
+    )
+
+    try:
+        manager.set_provider(
+            provider_name
+        )
+    except ValueError:
+        manager.reset()
 
 
 print("Atlas آنلاین شد 🚀")
-if isinstance(ai, dict):
-    print(f"Provider: {ai.get('provider', 'unknown')}")
-else:
-    print(f"Provider: {ai.current_name()}")
-print("برای خروج بنویس: exit")
+
+
+print(
+    f"Provider: {manager.current_name()}"
+)
+
+
+print(
+    "برای خروج بنویس: exit"
+)
 
 
 while True:
@@ -30,10 +57,13 @@ while True:
 
 
     if not user_input:
+
         print(
             "Atlas: یک پیام بنویس محمد 🙂"
         )
+
         continue
+
 
 
     if user_input.lower() == "exit":
@@ -53,6 +83,9 @@ while True:
     command = user_input.lower()
 
 
+
+    # Token Usage
+
     if command in [
         "وضعیت مصرف",
         "مصرف توکن",
@@ -63,6 +96,62 @@ while True:
         print(
             "\nAtlas:\n",
             get_usage_report()
+        )
+
+        continue
+
+
+
+    # Provider Switch
+
+    if command.startswith(
+        "/provider"
+    ):
+
+        parts = user_input.split()
+
+
+        if len(parts) < 2:
+
+            print(
+                "Atlas: نام Provider را وارد کن."
+            )
+
+            continue
+
+
+        provider_name = parts[1]
+
+
+        try:
+
+            manager.set_provider(
+                provider_name
+            )
+
+
+            print(
+                f"✅ Provider changed to: {manager.current_name()}"
+            )
+
+
+        except Exception as error:
+
+            print(
+                f"⚠️ Provider Error: {error}"
+            )
+
+
+        continue
+
+
+
+    # Current Provider Status
+
+    if command == "/status":
+
+        print(
+            f"🧠 Current Provider: {manager.current_name()}"
         )
 
         continue
@@ -89,20 +178,9 @@ while True:
         )
 
 
-        if isinstance(ai, dict):
-            # Smart Router dict → resolve to real ProviderManager
-            from providers.manager import ProviderManager
-            provider_name = ai.get("provider", "gemini")
-            manager = ProviderManager()
-            try:
-                manager.set_provider(provider_name)
-            except ValueError:
-                manager.reset()
-            answer = manager.chat(messages)
-        else:
-            answer = ai.chat(
-                messages
-            )
+        answer = manager.chat(
+            messages
+        )
 
 
         elapsed = time.time() - start
@@ -125,7 +203,9 @@ while True:
         )
 
 
+
     except Exception as error:
+
 
         print(
             "\n⚠️ Atlas Error:",

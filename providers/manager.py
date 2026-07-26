@@ -1,33 +1,28 @@
 import time
 
 from providers.gemini import GeminiProvider
-from providers.github import GitHubProvider
 from providers.nvidia import NvidiaProvider
+from providers.nrouter import NRouterProvider
+from providers.github import GitHubProvider
 from providers.openrouter import OpenRouterProvider
 
 
 class ProviderManager:
-
 
     def __init__(self):
 
         self.providers = [
 
             GeminiProvider,
-
             NvidiaProvider,
-
+            NRouterProvider,
             GitHubProvider,
-
             OpenRouterProvider,
 
         ]
 
-
         self.current_index = 0
-
         self._current_instance = None
-
 
 
     @property
@@ -38,7 +33,6 @@ class ProviderManager:
             self._current_instance = self.providers[
                 self.current_index
             ]()
-
 
         return self._current_instance
 
@@ -68,7 +62,6 @@ class ProviderManager:
             self.current_index = 0
 
 
-
         self._current_instance = None
 
 
@@ -84,9 +77,7 @@ class ProviderManager:
     def reset(self):
 
         self.current_index = 0
-
         self._current_instance = None
-
 
 
 
@@ -98,13 +89,19 @@ class ProviderManager:
         provider_name = provider_name.lower()
 
 
-        # Compatibility با Smart Router
-
         aliases = {
 
             "google": "gemini",
 
             "gemini": "gemini",
+
+            "nrouter": "nrouter",
+
+            "nvidia": "nvidia",
+
+            "github": "github",
+
+            "openrouter": "openrouter",
 
         }
 
@@ -134,7 +131,7 @@ class ProviderManager:
                 self._current_instance = None
 
 
-                return
+                return self.current
 
 
 
@@ -144,12 +141,10 @@ class ProviderManager:
 
 
 
-
     def chat(
         self,
         messages
     ):
-
 
         attempts = len(
             self.providers
@@ -166,9 +161,7 @@ class ProviderManager:
             provider = self.current_name()
 
 
-
             try:
-
 
                 print(
                     f"🧠 Using: {provider}"
@@ -180,9 +173,7 @@ class ProviderManager:
                 )
 
 
-
                 start = time.time()
-
 
 
                 answer = self.current.chat(
@@ -190,15 +181,12 @@ class ProviderManager:
                 )
 
 
-
                 elapsed = time.time() - start
-
 
 
                 print(
                     f"⏱️ Response: {elapsed:.2f}s"
                 )
-
 
 
                 return answer
@@ -211,11 +199,9 @@ class ProviderManager:
                 last_error = error
 
 
-
                 print(
                     f"⚠️ {provider} failed: {error}"
                 )
-
 
 
                 self.next_provider()
