@@ -1,87 +1,82 @@
 """
-Memory Coordinator v2.1
+Memory Coordinator v2.2 — THE ONLY entry point for Atlas OS memory.
+
+Architecture:
+    Brain → Coordinator → Router → Pipeline → Repository → Backend
 
 The Coordinator is responsible for:
+  - Being the ONLY interface Brain/Agent/Tool talk to
   - Managing ConversationState
   - Managing Context
-  - Coordinating Pipeline + Engine
+  - Coordinating Router → Pipeline → Repository
   - Preparing memory for Brain
 
 The Coordinator does NOT:
-  - Route requests (Router does that)
   - Build individual records (Pipeline does that)
-  - Store directly to backend (Engine does that)
+  - Store directly to backend (Repository does that)
+  - Route requests (Router does that)
 """
 
 import time
 
-from core.memory.memory_engine import MemoryEngine
+from core.memory.memory_repository import MemoryRepository
 from core.memory.conversation_state import ConversationStateManager
 from core.memory.context_manager import ContextManager
 from core.memory.memory_pipeline import MemoryPipeline
-from core.memory.types import MEMORY_TYPES
-from core.memory.backend import MemoryBackend
-from core.memory.policy import MemoryPolicy
+from core.memory.memory_router import MemoryRouter
+from core.memory.context_builder import ContextBuilder
 
 
 class MemoryCoordinator:
     """
-    Memory Coordinator v2.1
+    The ONLY entry point for all memory operations in Atlas OS.
 
-    The central coordination hub for Atlas OS memory system.
-    Bridges Router ↔ Pipeline ↔ Engine ↔ Context.
+    Brain, Agent, and Tool all talk to Coordinator.
+    Coordinator delegates to Router → Pipeline → Repository → Backend.
     """
 
-    def __init__(
-        self,
-        backend=None,
-        policy=None,
-    ):
-        # Backend + Policy (shared across layers)
-        self._backend = backend
-        self._policy = policy or MemoryPolicy()
+    def __init__(self, backend=None):
+        """
+        Args:
+            backend: MemoryBackend instance (shared across all layers)
+        """
+        # ── Data layer ──
+        self.repository = MemoryRepository(backend=backend)
 
-        # Core components
-        if backend:
-            self.memory = MemoryEngine()
-        else:
-            self.memory = MemoryEngine()
+        # ── Business logic ──
+        self.pipeline = MemoryPipeline(repository=self.repository)
 
+        # ── State management ──
         self.state = ConversationStateManager()
         self.context = ContextManager()
 
-        # Pipeline with shared backend
-        self.pipeline = MemoryPipeline(
-            backend=self._backend,
-            policy=self._policy,
-            memory_engine=self.memory,
+        # ── Routing (pure switch) ──
+        self.router = MemoryRouter(
+            pipeline=self.pipeline,
+            coordinator=self,  # circular but intentional — Router delegates back
         )
 
+        # ── Context export ──
+        self._context_builder = ContextBuilder(backend=backend)
+
     # ═══════════════════════════════════════════════
-    #  PROCESS MESSAGE — main entry point
+    #  THE ONLY ENTRY POINT — Brain talks here
     # ═══════════════════════════════════════════════
 
-    def process_message(
-        self,
-        user_id,
-        message,
-    ):
+    def process_message(self, user_id, message):
         """
         Process a user message through the full memory pipeline.
 
-        Steps:
-          1. Register message in ConversationState
-          2. Process through Pipeline (analyze → store)
-          3. Build context for Brain
+        This is the ONLY way external code should interact with memory.
         """
         # 1. Register in conversation
         self.state.add_message("user", message)
 
-        # 2. Process through pipeline
-        memory_result = self.pipeline.process(message)
+        # 2. Process through pipeline (analyze → build record → store)
+        memory_result = self.pipeline.process(text=message)
 
-        # 3. Build context
-        context = self.build_context(user_id, message)
+        # 3. Build context for Brain
+        context = self._build_context(user_id, message)
 
         return {
             "status": "processed",
@@ -91,88 +86,84 @@ class MemoryCoordinator:
             "context": context,
         }
 
+    def process_brain_request(self, message):
+        """
+        Brain requests go through Pipeline for analysis + storage.
+        """
+        return self.pipeline.process(text=message)
+
+    def process_tool_output(self, message):
+        """
+        Tool outputs go through Pipeline with default handling.
+        """
+        return self.pipeline.process(text=message)
+
     # ═══════════════════════════════════════════════
-    #  BUILD CONTEXT
+    #  ROUTING — delegate to Router
     # ═══════════════════════════════════════════════
 
-    def build_context(
-        self,
-        user_id,
-        message,
-    ):
+    def route(self, message, source="brain", user_id=None):
+        """
+        Route a request — pure delegation to Router.
+        """
+        return self.router.route(message, source, user_id)
+
+    # ═══════════════════════════════════════════════
+    #  CONTEXT
+    # ═══════════════════════════════════════════════
+
+    def _build_context(self, user_id, message):
         """Build full context snapshot for Brain."""
         return {
             "user_id": user_id,
             "message": message,
             "conversation": self.state.snapshot(),
             "context": self.context.get_context(),
-            "memory": self.memory.get_context(),
+            "memory": self.repository.get_context(),
             "timestamp": time.time(),
         }
+
+    def export_context(self, **kwargs):
+        """Export context for Brain prompt construction."""
+        return self._context_builder.export(**kwargs)
+
+    def export_context_for_brain(self, **kwargs):
+        """Export context as formatted string for Brain prompt."""
+        return self._context_builder.export_for_brain(**kwargs)
 
     # ═══════════════════════════════════════════════
     #  MESSAGE MANAGEMENT
     # ═══════════════════════════════════════════════
 
-    def add_message(
-        self,
-        role,
-        content,
-        metadata=None,
-    ):
+    def add_message(self, role, content, metadata=None):
         """Add a message to conversation state."""
         self.state.add_message(role, content, metadata)
-        return {
-            "status": "success",
-            "event": "message_added",
-            "role": role,
-        }
+        return {"status": "success", "event": "message_added", "role": role}
 
     # ═══════════════════════════════════════════════
     #  CONTEXT MANAGEMENT
     # ═══════════════════════════════════════════════
 
-    def update_context(
-        self,
-        category,
-        data,
-    ):
+    def update_context(self, category, data):
         """Update a context category."""
         self.context.update(category, data)
-        return {
-            "status": "updated",
-            "category": category,
-        }
+        return {"status": "updated", "category": category}
 
     # ═══════════════════════════════════════════════
-    #  DIRECT MEMORY OPERATIONS
+    #  DIRECT REPOSITORY ACCESS
     # ═══════════════════════════════════════════════
 
-    def save_memory(
-        self,
-        category,
-        key,
-        value,
-    ):
-        """Save directly to MemoryEngine."""
-        self.memory.save(category, key, value)
-        return {
-            "status": "saved",
-            "category": category,
-            "key": key,
-        }
+    def save_memory(self, category, key, value):
+        """Save directly to Repository."""
+        self.repository.save(category, key, value)
+        return {"status": "saved", "category": category, "key": key}
 
-    def load_memory(
-        self,
-        category,
-        key,
-        default=None,
-    ):
-        """Load from MemoryEngine."""
-        return self.memory.load(category, key, default)
+    def load_memory(self, category, key, default=None):
+        """Load from Repository."""
+        return self.repository.load(category, key, default)
 
     # ═══════════════════════════════════════════════
-    #  SNAPSHOT / EXPORT
+    #  SNAPSHOT
     # ═══════════════════════════════════════════════
 
     def snapshot(self):
@@ -180,11 +171,18 @@ class MemoryCoordinator:
         return {
             "conversation": self.state.snapshot(),
             "context": self.context.get_context(),
-            "memory": self.memory.get_context(),
+            "memory": self.repository.get_context(),
         }
 
-    def export_context(self):
-        """Export context for Brain prompt construction."""
-        from core.memory.context_builder import ContextBuilder
-        builder = ContextBuilder(backend=self._backend)
-        return builder.export()
+    # ═══════════════════════════════════════════════
+    #  LIFECYCLE
+    # ═══════════════════════════════════════════════
+
+    def open(self):
+        self.repository.open()
+
+    def close(self):
+        self.repository.close()
+
+    def health(self):
+        return self.repository.health()

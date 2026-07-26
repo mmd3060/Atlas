@@ -1,13 +1,13 @@
 """
-Memory Pipeline v2.1
+Memory Pipeline v2.2
 
-Pipeline is responsible for:
+Pipeline is responsible for ALL decisions:
   - Importance Analysis (via MemoryImportanceAnalyzer)
   - Category Detection
   - Building MemoryRecords
   - Validation
   - Deciding whether to store or discard
-  - Storing via Backend
+  - Storing via Repository
 
 Pipeline does NOT:
   - Route requests (Router does that)
@@ -16,41 +16,30 @@ Pipeline does NOT:
 """
 
 from core.memory.memory_importance import MemoryImportanceAnalyzer
-from core.memory.types import MemoryRecord, MEMORY_TYPES
-from core.memory.backend import MemoryBackend
-from core.memory.backends.dict_backend import DictBackend
+from core.memory.types import MemoryRecord
 from core.memory.policy import MemoryPolicy
-from core.memory.memory_engine import MemoryEngine
+from core.memory.memory_repository import MemoryRepository
 
 
 class MemoryPipeline:
     """
-    Memory Pipeline v2.1
-
     The decision-making layer for memory storage.
-    Receives text from Router, analyzes it, builds a MemoryRecord,
-    and stores it via the Backend.
+
+    Receives text, analyzes it, builds a MemoryRecord,
+    and stores it via the Repository.
     """
 
-    def __init__(
-        self,
-        backend=None,
-        policy=None,
-        memory_engine=None,
-    ):
+    def __init__(self, repository=None, policy=None):
+        """
+        Args:
+            repository: MemoryRepository instance (for data access)
+            policy:     MemoryPolicy instance (for rules)
+        """
         self.analyzer = MemoryImportanceAnalyzer()
-        self._backend = backend or DictBackend()
+        self._repository = repository or MemoryRepository()
         self._policy = policy or MemoryPolicy()
 
-        # Legacy compatibility
-        self._memory_engine = memory_engine
-
-    def process(
-        self,
-        text,
-        memory_type=None,
-        importance=None,
-    ):
+    def process(self, text, memory_type=None, importance=None):
         """
         Full pipeline: analyze → decide → build record → store.
 
@@ -58,6 +47,9 @@ class MemoryPipeline:
             text:         The content to process
             memory_type:  Force a specific type (skip auto-detection)
             importance:   Force importance score (skip analyzer)
+
+        Returns:
+            Result dict with status, category, key, etc.
         """
         # ── Step 1: Analyze importance ──
         if importance is not None:
@@ -74,16 +66,10 @@ class MemoryPipeline:
 
         # ── Step 2: Should we save? ──
         if not analysis["save"]:
-            return {
-                "status": "ignored",
-                "analysis": analysis,
-            }
+            return {"status": "ignored", "analysis": analysis}
 
         # ── Step 3: Determine memory type ──
-        if memory_type:
-            category = memory_type
-        else:
-            category = analysis["category"]
+        category = memory_type or analysis["category"]
 
         # ── Step 4: Check policy acceptance ──
         imp = analysis["importance"]
@@ -94,33 +80,23 @@ class MemoryPipeline:
                 "analysis": analysis,
             }
 
-        # ── Step 5: Build MemoryRecord ──
+        # ── Step 5: Build MemoryRecord (Pipeline builds, not Router) ──
         key = MemoryRecord.generate_key(text, category)
-        record = self.build_record(
+        record = self._build_record(
             key=key,
             value=text,
             memory_type=category,
             importance=imp,
-            source="pipeline",
         )
 
-        # ── Step 6: Store ──
-        existing = self._backend.get(category, key)
+        # ── Step 6: Store via Repository ──
+        existing = self._repository.load(category, key)
         if existing is not None:
-            # merge and update
-            merged_meta = {**existing.metadata, **record.metadata}
-            record.metadata = merged_meta
-            record.created_at = existing.created_at
-            record.access_count = existing.access_count
-            self._backend.update(record)
+            self._repository.update(category, key, text)
             action = "updated"
         else:
-            self._backend.put(record)
+            self._repository.save(category, key, text)
             action = "stored"
-
-        # Legacy compatibility
-        if self._memory_engine:
-            self._memory_engine.save(category, key, text)
 
         return {
             "status": action,
@@ -130,20 +106,12 @@ class MemoryPipeline:
             "analysis": analysis,
         }
 
-    def build_record(
-        self,
-        key,
-        value,
-        memory_type="short",
-        importance=0.5,
-        tags=None,
-        source="pipeline",
-        ttl=None,
-        metadata=None,
-    ):
+    def _build_record(self, key, value, memory_type="short",
+                      importance=0.5, tags=None, source="pipeline",
+                      ttl=None, metadata=None):
         """
         Build a MemoryRecord from raw data.
-        This is Pipeline's responsibility — not the Router's.
+        Pipeline's responsibility — not Router's.
         """
         return MemoryRecord(
             key=key,
@@ -155,15 +123,3 @@ class MemoryPipeline:
             ttl=ttl or self._policy.get(memory_type).ttl_seconds,
             metadata=metadata or {},
         )
-
-    def get_memory_context(self):
-        """Legacy: return context from MemoryEngine."""
-        if self._memory_engine:
-            return self._memory_engine.get_context()
-        return {}
-
-    # ── backward compatibility ──
-    @property
-    def memory(self):
-        """Legacy: access to MemoryEngine for old code."""
-        return self._memory_engine or MemoryEngine()
