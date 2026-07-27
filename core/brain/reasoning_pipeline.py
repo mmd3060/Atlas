@@ -1,27 +1,25 @@
 """
-Brain Reasoning Pipeline v1 — The heart of Atlas.
+Enhanced Reasoning Pipeline with Tool Calling Support.
 
 Flow:
-  User Message → Input Analyzer → Memory Recall → Decision Engine
-  → Prompt Builder → Response → Auto Remember
-
-Usage:
-    pipeline = ReasoningPipeline(adapter=memory_adapter)
-    result = pipeline.process("ادامه پروژه Atlas")
-    # {analysis, memory_context, prompt, decision, response}
+    User -> Analyze -> Decision (Tool or LLM) -> Execute -> Synthesize -> Respond
 """
 
-from typing import Any, Dict, Optional
+import json
+import re
+from typing import Any, Dict, List, Optional
 
 from core.brain.input_analyzer import InputAnalyzer
 from core.brain.prompt_builder import PromptBuilder
 from core.brain.response_memory import ResponseMemory
 from core.brain.memory_context import MemoryContext
+from core.brain.tool_integration import ToolIntegration
+from core.tools.tool_system import ToolSystem
 
 
 class ReasoningPipeline:
     """
-    The full reasoning flow for Atlas.
+    Enhanced reasoning pipeline with tool calling capability.
     """
 
     def __init__(self, adapter=None):
@@ -30,46 +28,45 @@ class ReasoningPipeline:
         self._memory_context = MemoryContext(adapter=adapter) if adapter else None
         self._prompt_builder = PromptBuilder()
         self._response_memory = ResponseMemory(adapter=adapter) if adapter else None
+        self._tool_system = ToolSystem()
 
-    def process(
-        self,
-        message: str,
-        skip_llm: bool = False,
-    ) -> Dict[str, Any]:
+    def process(self, message: str) -> Dict[str, Any]:
         """
-        Process a user message through the full reasoning pipeline.
-
-        Args:
-            message:  User message
-            skip_llm: Skip actual LLM call (for testing)
-
-        Returns:
-            {analysis, memory_context, prompt, decision, response}
+        Full reasoning pipeline with tool calling.
         """
-        # ── Step 1: Analyze input ──
+        # Step 1: Analyze input
         analysis = self._analyzer.analyze(message)
-
-        # ── Step 2: Recall relevant memories ──
+        
+        # Step 2: Recall relevant memories
         memory_ctx = {}
         if self._memory_context:
             memory_ctx = self._memory_context.build(message)
 
-        # ── Step 3: Build prompt with memory ──
-        prompt = self._prompt_builder.build(
-            message=message,
-            memory_context=memory_ctx,
-            analysis=analysis,
-        )
-
-        # ── Step 4: Make decision (simplified) ──
-        decision = self._make_decision(analysis)
-
-        # ── Step 5: Get response (skip LLM for testing) ──
+        # Step 3: Decide - Tool or Direct LLM?
+        decision = self._make_decision(message, analysis)
+        
         response = None
-        if not skip_llm:
-            response = self._get_response(prompt)
+        tool_results = []
+        
+        if decision.get("use_tool"):
+            # Tool calling path
+            tool_name = decision.get("tool")
+            tool_args = decision.get("args", {})
+            
+            # Execute via ToolSystem
+            result = self._execute_tool_safely(tool_name, tool_args)
+            tool_results.append(result)
+            
+            # If tool succeeded, synthesize response with tool result
+            if result.get("status") == "success":
+                response = self._synthesize_with_tool(message, result)
+            else:
+                response = f"Tool execution failed: {result.get('reason', 'Unknown error')}"
+        else:
+            # Direct LLM path (placeholder for now)
+            response = self._get_llm_response(message, analysis, memory_ctx)
 
-        # ── Step 6: Remember the interaction ──
+        # Store response in memory
         if self._response_memory and response:
             self._response_memory.remember_response(
                 message=message,
@@ -80,36 +77,113 @@ class ReasoningPipeline:
         return {
             "analysis": analysis,
             "memory_context": memory_ctx,
-            "prompt": prompt,
             "decision": decision,
+            "tool_results": tool_results,
             "response": response,
         }
 
-    def _make_decision(self, analysis: Dict) -> Dict[str, Any]:
-        """Make a routing decision based on analysis."""
+    def _make_decision(self, message: str, analysis: Dict) -> Dict[str, Any]:
+        """
+        Decide: Use tool or direct LLM?
+        """
         task_type = analysis.get("task_type", "general")
-        complexity = analysis.get("complexity", "medium")
+        msg_lower = message.lower()
 
-        # Simple decision rules
-        if task_type == "coding":
-            provider = "github"
-            model = "llama-3.3-70b"
-        elif task_type == "math":
-            provider = "openrouter"
-            model = "claude-3.5-sonnet"
-        elif complexity == "high":
-            provider = "openrouter"
-            model = "gpt-4o"
-        else:
-            provider = "openrouter"
-            model = "llama-3.3-70b"
-
-        return {
-            "provider": provider,
-            "model": model,
-            "task_type": task_type,
+        # Explicit tool commands
+        tool_triggers = {
+            "file_read": ["بخوان", "بخواند", "محتوی", "read file", "cat "],
+            "file_write": ["بنویس در فایل", "ذخیره در فایل", "write file", "save to file"],
+            "terminal": ["اجرا", "دستور", "run ", "execute ", "bash "],
+            "list_files": ["لیست فایل", "فایل‌ها", "ls ", "list files"],
         }
 
-    def _get_response(self, prompt: Dict) -> str:
-        """Get response from LLM (placeholder)."""
-        return f"[Response to: {prompt.get('user_prompt', '')[:50]}]"
+        for tool, triggers in tool_triggers.items():
+            if any(t in msg_lower for t in triggers):
+                # Extract arguments
+                args = self._extract_tool_args(message, tool)
+                return {
+                    "use_tool": True,
+                    "tool": tool,
+                    "args": args,
+                    "reason": f"Detected {tool} trigger",
+                }
+
+        # Coding task - might need file operations
+        if analysis.get("task_type") == "coding":
+            return {
+                "use_tool": False,
+                "reason": "Direct LLM for coding",
+            }
+
+        return {
+            "use_tool": False,
+            "reason": "General conversation - direct LLM",
+        }
+
+    def _extract_tool_args(self, message: str, tool: str) -> Dict[str, Any]:
+        """Extract arguments from natural language."""
+        args = {}
+        
+        if tool == "file_read" or tool == "file_write":
+            # Try to extract file path
+            import re
+            # Look for file paths
+            paths = re.findall(r'[\w/.-]+\.(py|txt|md|json|yaml|yml|sh)', message)
+            if paths:
+                args["path"] = paths[0]
+            else:
+                # Try to find quoted strings
+                quoted = re.findall(r'["\']([^"\']+)["\']', message)
+                if quoted:
+                    args["path"] = quoted[0]
+        
+        if tool == "terminal":
+            # Extract command after trigger words
+            import re
+            match = re.search(r'(اجرا|دستور|run|execute|bash)\s+(.+)', message, re.IGNORECASE)
+            if match:
+                args["command"] = match.group(2).strip()
+        
+        if tool == "file_write":
+            # Try to extract content
+            import re
+            content_match = re.search(r'(?:با محتوای|content|متن)\s*[:\-]\s*(.+)', message, re.IGNORECASE)
+            if content_match:
+                args["content"] = content_match.group(1).strip()
+        
+        return args
+
+    def _execute_tool_safely(self, tool_name: str, args: Dict) -> Dict:
+        """Execute tool via ToolSystem with permission check."""
+        from core.tools.tool_system import ToolSystem
+        tool_system = ToolSystem()
+        return tool_system.execute(tool_name, args)
+
+    def _synthesize_with_tool(self, message: str, tool_result: Dict) -> str:
+        """Create response incorporating tool result."""
+        result = tool_result.get("result", {})
+        
+        if result.get("stdout") is not None:
+            return f"✅ Command executed:\n```\n{result.get('stdout', '')}\n```"
+        
+        if result.get("content") is not None:
+            content = result.get("content", "")
+            return f"📄 File content:\n```\n{content[:2000]}\n```"
+        
+        if result.get("files") is not None:
+            files = result.get("files", [])
+            out = f"📁 Directory listing ({len(files)} items):\n"
+            for f in files[:20]:
+                icon = "📁" if f.get("is_dir") else "📄"
+                out += f"  {icon} {f['name']}\n"
+            return out
+        
+        if result.get("total_memories") is not None:
+            return f"💾 Memory Status: {result.get('total_memories')} memories stored."
+        
+        return f"Tool executed: {result}"
+
+    def _get_llm_response(self, message: str, analysis: Dict, memory_ctx: Dict) -> str:
+        """Get response from LLM (placeholder - uses Engine)."""
+        # This would call ExecutionEngine in production
+        return f"[LLM Response for: {message[:50]}...]"
