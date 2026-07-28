@@ -185,34 +185,54 @@ def start_bot():
         await update.message.reply_text("🖼️ Photo received! Vision analysis coming soon.")
 
     async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle voice messages: Convert to text -> Process -> Respond -> Convert to Voice."""
-        await update.message.reply_text("🎤 در حال پردازش صوت...")
-        
-        # ۱. دانلود ویس
-        file = await update.message.voice.get_file()
-        voice_path = os.path.join(tempfile.gettempdir(), "input.ogg")
-        await file.download_to_drive(voice_path)
-        
-        # ۲. تبدیل به متن (STT)
-        from core.interfaces.voice_gateway import VoiceGateway
-        vg = VoiceGateway()
-        stt_result = vg.speech_to_text(voice_path)
-        text = stt_result.get("text", "")
-        
-        if not text:
-            await update.message.reply_text("⚠️ متوجه نشدم! لطفاً دوباره بگو.")
-            return
-            
-        await update.message.reply_text(f"📝 متن: {text}")
-        
-        # ۳. پردازش توسط مغز اطلس
-        response_text = engine.execute(text)
-        await update.message.reply_text(f"🤖 اطلس: {response_text}")
-        
-        # ۴. تبدیل پاسخ به صدا (TTS) و ارسال
-        voice_response_path = vg.text_to_speech(response_text)
-        if voice_response_path:
-            await update.message.reply_voice(voice=open(voice_response_path, 'rb'))
+        """Handle voice messages: STT → Process → TTS → Send back."""
+        try:
+            await update.message.reply_text("🎤 دارم گوش می‌دم...")
+
+            # ۱. دانلود فایل صوتی
+            file = await update.message.voice.get_file()
+            voice_path = os.path.join(tempfile.gettempdir(), "input.ogg")
+            await file.download_to_drive(voice_path)
+            print(f"📥 Voice downloaded: {voice_path}")
+
+            # ۲. تبدیل به متن (STT)
+            from core.interfaces.voice_gateway import VoiceGateway
+            vg = VoiceGateway()
+            stt_result = vg.speech_to_text(voice_path)
+            text = stt_result.get("text", "")
+            error = stt_result.get("error")
+
+            if error:
+                print(f"⚠️ STT Error: {error}")
+                await update.message.reply_text(f"⚠️ خطا در تشخیص صدا:\n{error}")
+                return
+
+            if not text:
+                await update.message.reply_text(
+                    "⚠️ متوجه نشدم! لطفاً دوباره بگو یا متن بنویس."
+                )
+                return
+
+            await update.message.reply_text(f"📝 شنیدم: {text}")
+
+            # ۳. پردازش توسط مغز اطلس
+            response_text = engine.execute(text)
+            await update.message.reply_text(f"🤖 اطلس:\n{response_text}")
+
+            # ۴. تبدیل پاسخ به صدا (TTS)
+            try:
+                voice_path = vg.text_to_speech(response_text)
+                if voice_path and os.path.exists(voice_path):
+                    with open(voice_path, "rb") as audio_file:
+                        await update.message.reply_voice(voice=audio_file)
+                else:
+                    print("⚠️ TTS failed, text response sent instead")
+            except Exception as tts_err:
+                print(f"⚠️ TTS Error: {tts_err}")
+
+        except Exception as e:
+            print(f"❌ Voice Handler Error: {e}")
+            await update.message.reply_text(f"❌ خطای پردازش صوت:\n{e}")
 
     # ==========================================
     # Build Application
