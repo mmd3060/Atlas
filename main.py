@@ -23,6 +23,7 @@ from core.interfaces.gateway_manager import GatewayManager
 from core.intelligence.consensus_engine import ConsensusEngine
 from core.agents.agent_manager import AgentManager
 from core.agents.self_modifying_agent import SelfModifyingAgent
+from core.agents.autonomous_builder import AutonomousBuilder
 from memory.chat_memory import add_message
 from stats.token_tracker import get_usage_report
 from providers.manager import ProviderManager
@@ -167,12 +168,34 @@ def run(atlas):
             if len(parts) < 2:
                 print("  Usage: /modify <file_path>")
                 continue
-            file_path = parts[1]
-            file_data = atlas["self_modifying"].read_code(file_path)
+            file_path = parts[1]            
+            file_data = atlas["self_modifying"].read_code(file_path)            
             if "error" in file_data:
                 print(f"  ❌ {file_data['error']}")
             else:
                 print(f"  📄 {file_path}: {file_data['lines']} lines, {file_data['size']} bytes")
+            continue
+
+        # Autonomous Build Command
+        if user_input.lower().startswith("/build"):
+            request = user_input[6:].strip()
+            if not request:
+                print("  Usage: /build <feature description in Persian or English>")
+                print("  Example: /build Add a calculator tool that does basic math")
+                print("  Example: /build یک ابزار تبدیل یونیت اضافه کن")
+                continue
+            print(f"  🏗️  Building: '{request[:60]}...'")
+            try:
+                builder = AutonomousBuilder(project_root=os.getcwd())
+                result = builder.build_feature(request)
+                if result.get("status") == "built":
+                    print(f"  ✅ Feature built!")
+                    print(f"  📄 Source: {result.get('file_path')}")
+                    print(f"  🧪 Test: {result.get('test_path')}")
+                else:
+                    print(f"  ❌ Build failed: {result.get('error', 'unknown')}")
+            except Exception as e:
+                print(f"  ❌ Build error: {e}")
             continue
 
         # --- Main Inference (via ExecutionEngine) ---

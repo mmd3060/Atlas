@@ -11,6 +11,8 @@ from typing import Any, Dict, List
 from core.tools.tool_executor import ToolExecutor
 from core.tools.permission_manager import PermissionManager
 from core.tools.image_editor import ImageEditor
+from core.tools.web_search import WebSearchTool
+from core.tools.file_manager import FileManager
 
 
 class ToolSystem:
@@ -23,6 +25,8 @@ class ToolSystem:
         self._executor = ToolExecutor()
         self._permission = PermissionManager()
         self._image_editor = ImageEditor()
+        self._web_search = WebSearchTool()
+        self._file_manager = FileManager()
         
         # Register available tools
         self._tools: Dict[str, Dict] = {
@@ -51,10 +55,30 @@ class ToolSystem:
                 "level": "safe",
                 "category": "system",
             },
-            "remove_background": {
-                "description": "Remove background from an image",
+            "web_search": {
+                "description": "Search the internet",
+                "level": "safe",
+                "category": "web",
+            },
+            "fetch_url": {
+                "description": "Fetch content from URL",
+                "level": "safe",
+                "category": "web",
+            },
+            "search_files": {
+                "description": "Search files by pattern (glob)",
+                "level": "safe",
+                "category": "files",
+            },
+            "grep_content": {
+                "description": "Search text inside files",
+                "level": "safe",
+                "category": "files",
+            },
+            "code_exec": {
+                "description": "Execute Python code",
                 "level": "moderate",
-                "category": "vision",
+                "category": "code",
             },
         }
 
@@ -75,8 +99,14 @@ class ToolSystem:
         if tool_name == "remove_background":
             result = self._image_editor.remove_background(
                 image_path=args.get("path", ""),
-                output_path=args.get("output_path")
+                output_path=args.get("output_path"),
             )
+        elif tool_name == "web_search":
+            query = args.get("query", "")
+            result = self._web_search.search(query)
+        elif tool_name == "fetch_url":
+            url = args.get("url", "")
+            result = self._web_search.fetch_url(url)
         else:
             result = self._executor.execute(tool_name, args)
         
