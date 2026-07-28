@@ -208,7 +208,7 @@ def start_bot():
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
 
     print("✅ Atlas Telegram Bot Online!")
-    print(f"🤖 Bot: @{app.bot.username if app.bot else 'loading...'}")
+    print("🤖 Bot starting...")
     app.run_polling()
 
 
