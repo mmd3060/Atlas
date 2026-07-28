@@ -185,8 +185,34 @@ def start_bot():
         await update.message.reply_text("🖼️ Photo received! Vision analysis coming soon.")
 
     async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle voice messages."""
-        await update.message.reply_text("🎤 Voice received! STT coming soon.")
+        """Handle voice messages: Convert to text -> Process -> Respond -> Convert to Voice."""
+        await update.message.reply_text("🎤 در حال پردازش صوت...")
+        
+        # ۱. دانلود ویس
+        file = await update.message.voice.get_file()
+        voice_path = os.path.join(tempfile.gettempdir(), "input.ogg")
+        await file.download_to_drive(voice_path)
+        
+        # ۲. تبدیل به متن (STT)
+        from core.interfaces.voice_gateway import VoiceGateway
+        vg = VoiceGateway()
+        stt_result = vg.speech_to_text(voice_path)
+        text = stt_result.get("text", "")
+        
+        if not text:
+            await update.message.reply_text("⚠️ متوجه نشدم! لطفاً دوباره بگو.")
+            return
+            
+        await update.message.reply_text(f"📝 متن: {text}")
+        
+        # ۳. پردازش توسط مغز اطلس
+        response_text = engine.execute(text)
+        await update.message.reply_text(f"🤖 اطلس: {response_text}")
+        
+        # ۴. تبدیل پاسخ به صدا (TTS) و ارسال
+        voice_response_path = vg.text_to_speech(response_text)
+        if voice_response_path:
+            await update.message.reply_voice(voice=open(voice_response_path, 'rb'))
 
     # ==========================================
     # Build Application
