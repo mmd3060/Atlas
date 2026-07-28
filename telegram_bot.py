@@ -168,7 +168,9 @@ def start_bot():
     # ==========================================
 
     async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle normal text messages."""
+        """Handle normal text messages with typing indicator."""
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        
         user_msg = update.message.text
         try:
             add_message("user", user_msg)
